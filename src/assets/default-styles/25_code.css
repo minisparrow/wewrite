@@ -1,7 +1,8 @@
 /* code section */
 
 :root {
-	--code-container-background-color: #282c34; /*#1E1E1E;*/
+	--code-container-background-color: #282c34;
+	/*#1E1E1E;*/
 	--code-section-background-color: #282c34;
 	--code-color: #abb2bf;
 	--code-comment-color: #5c6370;
@@ -76,7 +77,9 @@
 	padding: 10px 5px !important;
 	padding-left: .5em;
 	font-family: Consolas, Monaco, Menlo, monospace;
-	text-wrap: nowrap;
+	white-space: pre-wrap !important;
+	word-wrap: break-word !important;
+	overflow-x: auto;
 }
 
 .wewrite .code-section ul {
@@ -84,7 +87,7 @@
 	padding-bottom: var(--code-padding, 8px);
 	position: relative;
 	overflow: hidden;
-	background: var(--code-section-background-color, #282c34)!important;
+	background: var(--code-section-background-color, #282c34) !important;
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
@@ -94,7 +97,7 @@
 	white-space: normal;
 	width: fit-content;
 	user-select: none;
-	border-right: solid 0.5px  rgb(166, 166, 166);
+	border-right: solid 0.5px rgb(166, 166, 166);
 	padding-right: 5px;
 	color: var(--code-line-color, green);
 	border-bottom-left-radius: var(--code-border-radius, 4px);
@@ -112,7 +115,7 @@
 	list-style-type: none;
 	color: var(--code-line-color, red);
 	padding-left: 1rem;
-	
+
 }
 
 .wewrite .code-section ul>li::marker {
