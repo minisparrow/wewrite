@@ -19,10 +19,12 @@ export class Links extends WeWriteMarkedExtension {
         if (!this.allLinks.length) {
             return html;
         }
-        const links = this.allLinks.map((href, i) => {
+        // 去重但保持顺序
+        const uniqueLinks = [...new Set(this.allLinks)];
+        const links = uniqueLinks.map((href, i) => {
             return `<li>${href}&nbsp;↩</li>`;
         });
-        return `${html}<seciton class="foot-links"><br><hr class="foot-links-separator"><ol>${links.join('')}</ol></section>`;
+        return `${html}<section class="foot-links"><hr class="foot-links-separator"><ol>${links.join('')}</ol></section>`;
     }
 
     markedExtension(): MarkedExtension {
@@ -31,14 +33,13 @@ export class Links extends WeWriteMarkedExtension {
                 name: 'link',
                 level: 'inline',
                 renderer: (token: Tokens.Link) => {
-                    if (token.text.indexOf(token.href) === 0
-                        || (token.href.indexOf('https://mp.weixin.qq.com/mp') === 0)
-                        || (token.href.indexOf('https://mp.weixin.qq.com/s') === 0) 
-                        ) {
+                    if (token.href.startsWith('http')) {
+                        this.allLinks.push(token.href);
+                        return `<a href="${token.href}">${token.text}<sup>[${this.allLinks.length}]</sup></a>`;
+                    } else {
+                        // 非http外链直接返回，不添加到foot-links中
                         return `<a href="${token.href}">${token.text}</a>`;
                     }
-                    this.allLinks.push(token.href);
-                    return `<a>${token.text}<sup>[${this.allLinks.length}]</sup></a>`;
                     // else {
                     //     return `<a>${token.text}[${token.href}]</a>`;
                     // }

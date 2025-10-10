@@ -22,8 +22,10 @@ export class BlockquoteRenderer extends WeWriteMarkedExtension {
     return;
   }
 
-  rendererBlockquote(token: Tokens.Blockquote) {
-    const text = token.text.replace(/\n/gm, '<br>').trim()
+  async rendererBlockquote(token: Tokens.Blockquote) {
+    // 使用marked来解析blockquote中的内联元素，如链接
+    const parsedText = await this.marked.parseInline(token.text);
+    const text = parsedText.replace(/\n/gm, '<br>').trim();
     return `<blockquote dir="auto" ><span class="icon-pin"></span><div class="blockquote-inner" >${text}</div></blockquote>`
   }
   async rendererCallout(_token: Tokens.Blockquote) {
@@ -65,7 +67,7 @@ export class BlockquoteRenderer extends WeWriteMarkedExtension {
         if (matched){
           token.html =  await this.rendererCallout(token as Tokens.Blockquote)
         }else{
-          token.html =  this.rendererBlockquote(token as Tokens.Blockquote);
+          token.html =  await this.rendererBlockquote(token as Tokens.Blockquote);
         }
       },
       extensions: [{
