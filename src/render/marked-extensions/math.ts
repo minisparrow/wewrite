@@ -10,8 +10,10 @@ import { parseMath } from "../mathjax";
 import { MarkedExtension, Token, Tokens } from "marked";
 import { WeWriteMarkedExtension } from "./extension";
 
-const inlineRule = /^(\${1,2})(?!\$)((?:\\.|[^\\\n])*?(?:\\.|[^\\\n\$]))\1/;
-const blockRule = /^(\${1,2})\n((?:\\[^]|[^\\])+?)\n\1(?:\n|$)/;
+// 行内公式：$内容$ - 简化版本，只要求内容不为空且不包含换行
+const inlineRule = /^(\$)(?!\$)([^\n$]+?)\1(?!\$)/;
+// 块级公式：$$内容$$ - 使用非贪婪匹配找到最近的结束 $$
+const blockRule = /^(\$\$)([\s\S]*?)\1(?=\s|$)/;
 
 export class MathRenderer extends WeWriteMarkedExtension {
     
@@ -83,15 +85,31 @@ export class MathRenderer extends WeWriteMarkedExtension {
     blockMath() {
         return {
             name: 'BlockMath',
-            level: 'block',
+            level: 'inline', // 改为 inline level，这样可以在行内任意位置匹配
+            start(src: string) {
+                const index = src.indexOf('$$');
+                return index >= 0 ? index : undefined;
+            },
             tokenizer(src: string) {
                 const match = src.match(blockRule);
                 if (match) {
+                    const text = match[2].trim();
+                    // 忽略空内容或只有空白的公式
+                    if (!text || text.length === 0) {
+                        return undefined;
+                    }
+                    
+                    // 块级公式应该包含一定的复杂度
+                    // 允许较短的公式，但要求包含数学符号
+                    if (!text.includes('\n') && text.length < 2) {
+                        return undefined;
+                    }
+                    
                     return {
                         type: 'BlockMath',
                         raw: match[0],
-                        text: match[2].trim(),
-                        displayMode: match[1].length === 2
+                        text: text,
+                        displayMode: true
                     };
                 }
             },
