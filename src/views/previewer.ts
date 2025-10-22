@@ -90,6 +90,13 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 	mpModal: WebViewModal;
 	isActive: boolean = false;
 	renderPreviewer: any;
+	private scrollSyncEnabled: boolean = true;
+	private isScrolling: boolean = false;
+	private editorScrollListener: any = null;
+	private previewScrollListener: any = null;
+	private tocContainer: HTMLElement | null = null;
+	private tocVisible: boolean = false;
+	private contentWrapper: HTMLElement | null = null;
 	getViewType(): string {
 		return VIEW_TYPE_WEWRITE_PREVIEW;
 	}
@@ -125,6 +132,12 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 		);
 		this.plugin.messageService.sendMessage("active-file-changed", null);
 		this.loadComponents();
+		
+		// 延迟启动滚动同步，给足够时间让视图完全加载
+		setTimeout(() => {
+			console.log('[WeWrite ScrollSync] Initial sync setup from onOpen');
+			this.startScrollSync();
+		}, 2000);
 	}
 
 	getArticleProperties() {
@@ -187,7 +200,34 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 			.addDropdown((dropdown: DropdownComponent) => {
 				this.themeSelector.dropdown(dropdown);
 			})
-
+			.addExtraButton((button) => {
+				button
+					.setIcon("list")
+					.setTooltip($t("views.previewer.toggle-toc"))
+					.onClick(() => {
+						this.toggleTOC();
+						button.setIcon(this.tocVisible ? "list-checks" : "list");
+					});
+			})
+			.addExtraButton((button) => {
+				// 设置初始状态
+				button
+					.setIcon(this.scrollSyncEnabled ? "link" : "unlink")
+					.setTooltip(
+						this.scrollSyncEnabled 
+							? $t("views.previewer.scroll-sync-enabled")
+							: $t("views.previewer.scroll-sync-disabled")
+					)
+					.onClick(() => {
+						const enabled = this.toggleScrollSync();
+						button.setIcon(enabled ? "link" : "unlink");
+						button.setTooltip(
+							enabled 
+								? $t("views.previewer.scroll-sync-enabled")
+								: $t("views.previewer.scroll-sync-disabled")
+						);
+					});
+			})
 			.addExtraButton((button) => {
 				button
 					.setIcon("refresh-cw")
@@ -233,6 +273,9 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 
 		this.renderDiv = mainDiv.createDiv({ cls: "render-container" });
 		this.renderDiv.id = "render-div";
+		this.renderDiv.style.height = "100%";
+		this.renderDiv.style.overflow = "hidden"; // 禁止外层容器滚动
+		
 		this.renderPreviewer = mainDiv.createDiv({
 			cls: ".wewrite-render-preview",
 		})
@@ -245,8 +288,82 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 			];
 		}
 
+		// 创建主容器（flexbox 布局）
 		this.containerDiv = shadowDom.createDiv({ cls: "wewrite-article" });
-		this.articleDiv = this.containerDiv.createDiv({ cls: "article-div" });
+		this.containerDiv.style.display = "flex";
+		this.containerDiv.style.height = "100%";
+		this.containerDiv.style.overflow = "hidden";
+		
+		// 创建 TOC 容器（左侧，默认隐藏）
+		this.tocContainer = this.containerDiv.createDiv({ cls: "wewrite-toc-container" });
+		this.tocContainer.style.display = "none"; // 初始隐藏，显示时会设置为 flex
+		this.tocContainer.style.flexDirection = "column";
+		this.tocContainer.style.width = "250px";
+		this.tocContainer.style.minWidth = "150px";
+		this.tocContainer.style.maxWidth = "500px";
+		this.tocContainer.style.height = "100%";
+		this.tocContainer.style.overflowY = "hidden"; // 容器本身不滚动
+		this.tocContainer.style.overflowX = "hidden";
+		this.tocContainer.style.backgroundColor = "var(--background-secondary)";
+		this.tocContainer.style.padding = "10px";
+		this.tocContainer.style.borderRight = "1px solid var(--background-modifier-border)";
+		this.tocContainer.style.position = "relative";
+		this.tocContainer.style.flexShrink = "0";
+		
+		// 创建可拖拽的分隔条
+		const resizer = this.tocContainer.createDiv({ cls: "wewrite-toc-resizer" });
+		resizer.style.position = "absolute";
+		resizer.style.right = "0";
+		resizer.style.top = "0";
+		resizer.style.bottom = "0";
+		resizer.style.width = "4px";
+		resizer.style.cursor = "col-resize";
+		resizer.style.backgroundColor = "transparent";
+		resizer.style.zIndex = "10";
+		
+		// 添加拖拽功能
+		let isResizing = false;
+		let startX = 0;
+		let startWidth = 0;
+		
+		resizer.addEventListener('mousedown', (e) => {
+			isResizing = true;
+			startX = e.clientX;
+			startWidth = this.tocContainer!.offsetWidth;
+			e.preventDefault();
+		});
+		
+		document.addEventListener('mousemove', (e) => {
+			if (!isResizing) return;
+			const diff = e.clientX - startX;
+			const newWidth = startWidth + diff;
+			if (newWidth >= 150 && newWidth <= 500) {
+				this.tocContainer!.style.width = `${newWidth}px`;
+			}
+		});
+		
+		document.addEventListener('mouseup', () => {
+			isResizing = false;
+		});
+		
+		// 悬停时高亮分隔条
+		resizer.addEventListener('mouseenter', () => {
+			resizer.style.backgroundColor = "var(--interactive-accent)";
+		});
+		resizer.addEventListener('mouseleave', () => {
+			if (!isResizing) {
+				resizer.style.backgroundColor = "transparent";
+			}
+		});
+		
+		// 创建内容容器（右侧）
+		this.contentWrapper = this.containerDiv.createDiv({ cls: "wewrite-content-wrapper" });
+		this.contentWrapper.style.flex = "1";
+		this.contentWrapper.style.overflowY = "auto";
+		this.contentWrapper.style.overflowX = "hidden";
+		this.contentWrapper.style.height = "100%";
+		
+		this.articleDiv = this.contentWrapper.createDiv({ cls: "article-div" });
 	}
 	async checkCoverImage() {
 		return this.draftHeader.checkCoverImage();
@@ -374,6 +491,17 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 		await ThemeManager.getInstance(this.plugin).applyTheme(
 			this.articleDiv.firstChild as HTMLElement
 		);
+		
+		// 如果目录可见，重新生成目录
+		if (this.tocVisible) {
+			this.generateTOC();
+		}
+		
+		// 渲染完成后重新启动滚动同步
+		setTimeout(() => {
+			console.log('[WeWrite ScrollSync] Re-sync after render');
+			this.startScrollSync();
+		}, 300);
 	}
 	isViewActive(): boolean {
 		return this.isActive && !this.app.workspace.rightSplit.collapsed
@@ -403,22 +531,349 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 		const el = this.app.workspace.on("active-leaf-change", async (leaf) => {
 			if (leaf){
 				if(leaf.view.getViewType() === "markdown") {
+					console.log('[WeWrite ScrollSync] Active leaf changed to markdown');
 					this.plugin.messageService.sendMessage(
 						"active-file-changed",
 						null
 					);
 					this.debouncedUpdate();
+					// 切换到 Markdown 视图时，尝试启动滚动同步
+					setTimeout(() => {
+						console.log('[WeWrite ScrollSync] Re-sync after leaf change');
+						this.startScrollSync();
+					}, 800);
 				}else {
-					
-					this.isActive = (leaf.view === this)
+					this.isActive = (leaf.view === this);
+					// 如果切换到预览面板，也尝试启动同步
+					if (this.isActive && leaf.view === this) {
+						setTimeout(() => {
+							console.log('[WeWrite ScrollSync] Preview became active, trying sync');
+							this.startScrollSync();
+						}, 500);
+					}
 				}
-
 			}
 		});
 		this.listeners.push(el);
 	}
 	stopListen() {
 		this.listeners.forEach((e) => this.app.workspace.offref(e));
+		this.stopScrollSync();
+	}
+
+	/**
+	 * 获取编辑器滚动容器
+	 */
+	getEditorScrollContainer(): HTMLElement | null {
+		// 方法1: 尝试获取活动的 Markdown 视图
+		let markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		
+		// 方法2: 如果活动视图不是 Markdown，查找所有 Markdown 视图
+		if (!markdownView) {
+			const leaves = this.app.workspace.getLeavesOfType("markdown");
+			if (leaves.length > 0) {
+				markdownView = leaves[0].view as MarkdownView;
+				console.log('[WeWrite ScrollSync] Using first markdown view (not active)');
+			}
+		}
+		
+		if (!markdownView) {
+			console.log('[WeWrite ScrollSync] No markdown view found');
+			return null;
+		}
+		
+		// 方法A: 尝试从 CodeMirror 6 API 获取
+		try {
+			//@ts-ignore
+			const cm6ScrollDOM = markdownView.editor?.cm?.scrollDOM;
+			if (cm6ScrollDOM) {
+				console.log('[WeWrite ScrollSync] Found CM6 scroll container from API');
+				return cm6ScrollDOM;
+			}
+		} catch (e) {
+			console.log('[WeWrite ScrollSync] CM6 API not available');
+		}
+		
+		// 方法B: 从 DOM 查找
+		const leaf = markdownView.leaf;
+		const contentEl = (leaf as any).containerEl || leaf.view.containerEl;
+		
+		if (!contentEl) {
+			console.log('[WeWrite ScrollSync] No container element');
+			return null;
+		}
+		
+		// 尝试多种选择器
+		const selectors = [
+			'.cm-scroller',
+			'.markdown-source-view .cm-scroller',
+			'.cm-editor .cm-scroller',
+			'.markdown-source-view.mod-cm6 .cm-scroller'
+		];
+		
+		for (const selector of selectors) {
+			const scroller = contentEl.querySelector(selector);
+			if (scroller) {
+				console.log(`[WeWrite ScrollSync] Found scroller with: ${selector}`);
+				return scroller as HTMLElement;
+			}
+		}
+		
+		console.log('[WeWrite ScrollSync] No scroll container found in DOM');
+		return null;
+	}
+
+	/**
+	 * 启动滚动同步
+	 */
+	startScrollSync() {
+		if (!this.scrollSyncEnabled) {
+			console.log('[WeWrite ScrollSync] Sync disabled by user');
+			return;
+		}
+		
+		if (!this.containerDiv) {
+			console.log('[WeWrite ScrollSync] Preview container not ready');
+			return;
+		}
+		
+		// 移除旧的监听器
+		this.stopScrollSync();
+		
+		const editorScrollContainer = this.getEditorScrollContainer();
+		if (!editorScrollContainer) {
+			console.log('[WeWrite ScrollSync] Cannot find editor scroll container, will retry...');
+			return;
+		}
+		
+		console.log('[WeWrite ScrollSync] Starting scroll sync...');
+		console.log('[WeWrite ScrollSync] Editor container:', editorScrollContainer);
+		console.log('[WeWrite ScrollSync] Preview container:', this.containerDiv);
+		
+		// 编辑器滚动 -> 预览滚动
+		this.editorScrollListener = () => {
+			if (this.isScrolling) return;
+			this.isScrolling = true;
+			
+			const maxScroll = editorScrollContainer.scrollHeight - editorScrollContainer.clientHeight;
+			if (maxScroll <= 0) {
+				this.isScrolling = false;
+				return;
+			}
+			
+			const scrollPercentage = editorScrollContainer.scrollTop / maxScroll;
+			const previewMaxScroll = this.containerDiv.scrollHeight - this.containerDiv.clientHeight;
+			const previewScrollTop = scrollPercentage * previewMaxScroll;
+			
+			this.containerDiv.scrollTop = previewScrollTop;
+			
+			setTimeout(() => {
+				this.isScrolling = false;
+			}, 50);
+		};
+		
+		// 预览滚动 -> 编辑器滚动
+		this.previewScrollListener = () => {
+			if (this.isScrolling) return;
+			this.isScrolling = true;
+			
+			const maxScroll = this.containerDiv.scrollHeight - this.containerDiv.clientHeight;
+			if (maxScroll <= 0) {
+				this.isScrolling = false;
+				return;
+			}
+			
+			const scrollPercentage = this.containerDiv.scrollTop / maxScroll;
+			const editorMaxScroll = editorScrollContainer.scrollHeight - editorScrollContainer.clientHeight;
+			const editorScrollTop = scrollPercentage * editorMaxScroll;
+			
+			editorScrollContainer.scrollTop = editorScrollTop;
+			
+			setTimeout(() => {
+				this.isScrolling = false;
+			}, 50);
+		};
+		
+		editorScrollContainer.addEventListener('scroll', this.editorScrollListener, { passive: true });
+		this.containerDiv.addEventListener('scroll', this.previewScrollListener, { passive: true });
+		
+		console.log('[WeWrite ScrollSync] Scroll sync started successfully');
+	}
+
+	/**
+	 * 停止滚动同步
+	 */
+	stopScrollSync() {
+		const editorScrollContainer = this.getEditorScrollContainer();
+		
+		if (editorScrollContainer && this.editorScrollListener) {
+			editorScrollContainer.removeEventListener('scroll', this.editorScrollListener);
+			this.editorScrollListener = null;
+			console.log('[WeWrite ScrollSync] Removed editor listener');
+		}
+		
+		if (this.containerDiv && this.previewScrollListener) {
+			this.containerDiv.removeEventListener('scroll', this.previewScrollListener);
+			this.previewScrollListener = null;
+			console.log('[WeWrite ScrollSync] Removed preview listener');
+		}
+	}
+
+	/**
+	 * 切换滚动同步功能
+	 */
+	toggleScrollSync() {
+		this.scrollSyncEnabled = !this.scrollSyncEnabled;
+		if (this.scrollSyncEnabled) {
+			this.startScrollSync();
+		} else {
+			this.stopScrollSync();
+		}
+		return this.scrollSyncEnabled;
+	}
+
+	/**
+	 * 生成目录（TOC）
+	 */
+	generateTOC() {
+		if (!this.tocContainer || !this.articleDiv) return;
+		
+		// 清空目录，但保留 resizer
+		const resizer = this.tocContainer.querySelector('.wewrite-toc-resizer');
+		this.tocContainer.empty();
+		if (resizer) {
+			this.tocContainer.appendChild(resizer);
+		}
+		
+		// 查找所有标题
+		const headings = this.articleDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+		
+		if (headings.length === 0) {
+			const emptyDiv = this.tocContainer.createEl('div', {
+				text: $t("views.previewer.no-headings-found"),
+				cls: 'wewrite-toc-empty'
+			});
+			emptyDiv.style.padding = "20px";
+			emptyDiv.style.color = "var(--text-muted)";
+			emptyDiv.style.textAlign = "center";
+			return;
+		}
+		
+		// 创建标题（固定）
+		const titleEl = this.tocContainer.createEl('h4', {
+			text: $t("views.previewer.table-of-contents"),
+			cls: 'wewrite-toc-title'
+		});
+		titleEl.style.margin = "0 0 10px 0";
+		titleEl.style.padding = "0";
+		titleEl.style.fontSize = "14px";
+		titleEl.style.fontWeight = "bold";
+		titleEl.style.color = "var(--text-normal)";
+		titleEl.style.borderBottom = "1px solid var(--background-modifier-border)";
+		titleEl.style.paddingBottom = "8px";
+		titleEl.style.flexShrink = "0";
+		
+		// 创建可滚动的列表容器
+		const tocListWrapper = this.tocContainer.createEl('div', { cls: 'wewrite-toc-list-wrapper' });
+		tocListWrapper.style.overflowY = "auto";
+		tocListWrapper.style.overflowX = "hidden";
+		tocListWrapper.style.flex = "1";
+		tocListWrapper.style.marginTop = "5px";
+		
+		// 创建列表
+		const tocList = tocListWrapper.createEl('div', { cls: 'wewrite-toc-list' });
+		
+		headings.forEach((heading, index) => {
+			const level = parseInt(heading.tagName.substring(1)); // h1 -> 1, h2 -> 2, etc.
+			const text = heading.textContent || '';
+			const headingId = heading.getAttribute('id') || `wewrite-anchor-${index}`;
+			
+			// 确保标题有 id
+			if (!heading.getAttribute('id')) {
+				heading.setAttribute('id', headingId);
+			}
+			
+			const tocItem = tocList.createEl('div', {
+				cls: 'wewrite-toc-item',
+			});
+			
+			// 根据标题级别添加缩进
+			const indent = (level - 1) * 12;
+			tocItem.style.paddingLeft = `${indent}px`;
+			tocItem.style.cursor = 'pointer';
+			tocItem.style.padding = `4px 8px 4px ${8 + indent}px`;
+			tocItem.style.marginBottom = '1px';
+			tocItem.style.borderRadius = '3px';
+			tocItem.style.transition = 'background-color 0.1s';
+			
+			// 悬停效果
+			tocItem.addEventListener('mouseenter', () => {
+				tocItem.style.backgroundColor = 'var(--background-modifier-hover)';
+			});
+			tocItem.addEventListener('mouseleave', () => {
+				tocItem.style.backgroundColor = 'transparent';
+			});
+			
+			const link = tocItem.createEl('a', {
+				text: text,
+				cls: `wewrite-toc-link wewrite-toc-h${level}`
+			});
+			
+			link.style.textDecoration = 'none';
+			link.style.color = 'var(--text-normal)';
+			link.style.fontSize = `${Math.max(11, 14 - (level - 1))}px`;
+			link.style.display = 'block';
+			link.style.whiteSpace = 'nowrap';
+			link.style.overflow = 'hidden';
+			link.style.textOverflow = 'ellipsis';
+			link.title = text; // 悬停显示完整文本
+			
+			// 点击跳转到对应标题
+			tocItem.addEventListener('click', (e) => {
+				e.preventDefault();
+				console.log('[WeWrite TOC] Clicking on:', text, 'id:', headingId);
+				
+				// 查找目标标题
+				const targetHeading = this.articleDiv.querySelector(`#${headingId}`) as HTMLElement;
+				if (!targetHeading) {
+					console.log('[WeWrite TOC] Target heading not found');
+					return;
+				}
+				
+				// 方法1: 直接使用 scrollIntoView（最可靠）
+				console.log('[WeWrite TOC] Using scrollIntoView');
+				targetHeading.scrollIntoView({ 
+					behavior: 'smooth', 
+					block: 'start',
+					inline: 'nearest'
+				});
+				
+				// 额外日志：检查滚动容器
+				if (this.contentWrapper) {
+					setTimeout(() => {
+						console.log('[WeWrite TOC] After scroll - contentWrapper.scrollTop:', this.contentWrapper?.scrollTop);
+						console.log('[WeWrite TOC] contentWrapper scrollHeight:', this.contentWrapper?.scrollHeight);
+						console.log('[WeWrite TOC] contentWrapper clientHeight:', this.contentWrapper?.clientHeight);
+					}, 100);
+				}
+			});
+		});
+	}
+
+	/**
+	 * 切换目录显示/隐藏
+	 */
+	toggleTOC() {
+		if (!this.tocContainer) return;
+		
+		this.tocVisible = !this.tocVisible;
+		
+		if (this.tocVisible) {
+			this.generateTOC();
+			this.tocContainer.style.display = 'flex'; // 使用 flex 布局
+		} else {
+			this.tocContainer.style.display = 'none';
+		}
 	}
 
 	onEditorChange(editor: Editor, info: MarkdownView) {

@@ -210,6 +210,12 @@
       "send-article-to-draft-box": "Send article to draft box",
       "testing-button": "Testing button",
       "to-verify-the-images-in-article": "Verify images in the article",
+      "toggle-scroll-sync": "Toggle scroll sync",
+      "scroll-sync-enabled": "Scroll sync enabled",
+      "scroll-sync-disabled": "Scroll sync disabled",
+      "toggle-toc": "Toggle table of contents",
+      "table-of-contents": "Table of Contents",
+      "no-headings-found": "No headings found",
       "wewrite-previewer": "WeWrite previewer"
     },
     "send-mass-message": "Send mass message",

@@ -14,8 +14,12 @@ export class Heading extends WeWriteMarkedExtension {
 		const tempDiv = createEl('div');
 		tempDiv.appendChild(dom);
 		const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+		let anchorIndex = 0;
 		for (const heading of headings) {
 			const text = heading.textContent
+			// 插入唯一 id 属性，格式如 wewrite-anchor-0, wewrite-anchor-1 ...
+			heading.setAttr('id', `wewrite-anchor-${anchorIndex}`);
+			anchorIndex++;
 			heading.empty()
 			heading.createSpan({ text: " ", cls: 'wewrite-heading-prefix' })
 			const outbox = heading.createSpan({ cls: 'wewrite-heading-outbox' })

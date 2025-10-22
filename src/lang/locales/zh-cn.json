@@ -210,6 +210,12 @@
       "send-article-to-draft-box": "发送文章到草稿箱",
       "testing-button": "测试按钮",
       "to-verify-the-images-in-article": "验证文章中的图片",
+      "toggle-scroll-sync": "切换滚动同步",
+      "scroll-sync-enabled": "滚动同步已启用",
+      "scroll-sync-disabled": "滚动同步已禁用",
+      "toggle-toc": "切换目录",
+      "table-of-contents": "目录",
+      "no-headings-found": "未找到标题",
       "wewrite-previewer": "WeWrite预览器"
     },
     "send-mass-message": "群发消息",
