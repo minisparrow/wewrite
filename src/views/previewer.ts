@@ -720,6 +720,170 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 	}
 
 	/**
+	 * 滚动编辑器到指定标题
+	 */
+	async scrollEditorToHeading(headingText: string, headingLevel: number) {
+		console.log('[WeWrite TOC] scrollEditorToHeading called with:', { headingText, headingLevel });
+		try {
+			// 去掉标题文本的前导和尾随空格
+			headingText = headingText.trim();
+			console.log('[WeWrite TOC] Trimmed heading text:', headingText);
+			
+			// 获取当前预览的文件
+			const activeFile = this.app.workspace.getActiveFile();
+			console.log('[WeWrite TOC] Current active file:', activeFile?.path);
+			
+			// 获取 MarkdownView，优先使用激活的视图，否则查找匹配当前文件的视图
+			let markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+			
+			if (!markdownView && activeFile) {
+				console.log('[WeWrite TOC] No active markdown view, searching for view matching:', activeFile.path);
+				const leaves = this.app.workspace.getLeavesOfType('markdown');
+				for (const leaf of leaves) {
+					const view = leaf.view as MarkdownView;
+					if (view.file?.path === activeFile.path) {
+						markdownView = view;
+						console.log('[WeWrite TOC] Found matching markdown view for file');
+						break;
+					}
+				}
+			}
+			
+			if (!markdownView) {
+				console.log('[WeWrite TOC] Still no markdown view, using first available');
+				const leaves = this.app.workspace.getLeavesOfType('markdown');
+				if (leaves.length > 0) {
+					markdownView = leaves[0].view as MarkdownView;
+				}
+			}
+			
+			if (!markdownView) {
+				console.log('[WeWrite TOC] No markdown view found at all');
+				return;
+			}
+
+			console.log('[WeWrite TOC] Using markdown view for file:', markdownView.file?.path);
+
+			// 获取编辑器内容
+			const editor = markdownView.editor;
+			const content = editor.getValue();
+			const lines = content.split('\n');
+			console.log('[WeWrite TOC] Total lines in editor:', lines.length);
+
+			// 构建标题的正则表达式（例如：# Heading, ## Heading, ### Heading）
+			const headingPrefix = '#'.repeat(headingLevel);
+			const escapedText = headingText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const headingPattern = new RegExp(`^${headingPrefix}\\s+${escapedText}\\s*$`);
+			console.log('[WeWrite TOC] Looking for pattern:', headingPattern.toString());
+
+			// 查找标题所在的行号
+			let targetLine = -1;
+			const candidateLines: string[] = [];
+			
+			for (let i = 0; i < lines.length; i++) {
+				const trimmedLine = lines[i].trim();
+				// 收集所有匹配级别的标题，用于调试
+				if (trimmedLine.startsWith(headingPrefix + ' ')) {
+					candidateLines.push(`Line ${i}: ${trimmedLine}`);
+				}
+				
+				if (headingPattern.test(trimmedLine)) {
+					console.log('[WeWrite TOC] Pattern matched at line', i, ':', trimmedLine);
+					targetLine = i;
+					break;
+				}
+			}
+			
+			// 如果精确匹配失败，尝试模糊匹配（只检查标题文本，忽略空格和 Markdown 格式）
+			if (targetLine === -1) {
+				console.log('[WeWrite TOC] Exact match failed. All h' + headingLevel + ' headings in file:');
+				candidateLines.forEach(line => console.log('  ' + line));
+				console.log('[WeWrite TOC] Looking for:', headingText);
+				
+				// 标准化函数：去除空格、Markdown 格式标记（**、*、__、_、~~等）
+				const normalize = (text: string) => {
+					return text.toLowerCase()
+						.replace(/\*\*/g, '')  // 去除粗体 **
+						.replace(/\*/g, '')    // 去除斜体 *
+						.replace(/__/g, '')    // 去除粗体 __
+						.replace(/_/g, '')     // 去除斜体 _
+						.replace(/~~/g, '')    // 去除删除线 ~~
+						.replace(/`/g, '')     // 去除代码标记 `
+						.replace(/\s+/g, '')   // 去除所有空格
+						.trim();
+				};
+				
+				const normalizedText = normalize(headingText);
+				console.log('[WeWrite TOC] Normalized search text:', normalizedText);
+				
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i].trim();
+					if (line.startsWith(headingPrefix + ' ')) {
+						const lineText = line.substring(headingPrefix.length).trim();
+						const normalizedLineText = normalize(lineText);
+						
+						if (i < 10 || Math.abs(i - targetLine) < 5) {
+							console.log('[WeWrite TOC] Comparing with line', i, ':', lineText, '-> normalized:', normalizedLineText);
+						}
+						
+						if (normalizedLineText === normalizedText) {
+							console.log('[WeWrite TOC] ✅ Fuzzy matched at line', i, ':', lines[i]);
+							targetLine = i;
+							break;
+						}
+					}
+				}
+			}
+
+			if (targetLine === -1) {
+				console.log('[WeWrite TOC] Heading not found in editor:', headingText);
+				return;
+			}
+
+			console.log('[WeWrite TOC] Found heading at line:', targetLine);
+
+			// 滚动到目标行
+			// 暂时禁用滚动同步，避免循环滚动
+			const wasScrollSyncEnabled = this.scrollSyncEnabled;
+			if (wasScrollSyncEnabled) {
+				this.isScrolling = true;
+			}
+
+			// 设置光标位置
+			editor.setCursor({ line: targetLine, ch: 0 });
+			
+			// 滚动编辑器，让目标行显示在窗口顶部
+			// 使用 CodeMirror 6 的 scrollDOM 直接滚动
+			const editorView = (markdownView.editor as any).cm as EditorView;
+			if (editorView && editorView.scrollDOM) {
+				// 获取目标行的位置信息
+				const lineBlock = editorView.lineBlockAt(editorView.state.doc.line(targetLine + 1).from);
+				console.log('[WeWrite TOC] Target line block top:', lineBlock.top);
+				
+				// 滚动到目标行的顶部位置
+				editorView.scrollDOM.scrollTo({
+					top: lineBlock.top,
+					behavior: 'smooth'
+				});
+			} else {
+				// 降级方案：使用 scrollIntoView，但不居中
+				editor.scrollIntoView({ from: { line: targetLine, ch: 0 }, to: { line: targetLine, ch: 0 } }, false);
+			}
+
+			console.log('[WeWrite TOC] Scrolled editor to line:', targetLine);
+
+			// 恢复滚动同步
+			if (wasScrollSyncEnabled) {
+				setTimeout(() => {
+					this.isScrolling = false;
+				}, 100);
+			}
+		} catch (error) {
+			console.error('[WeWrite TOC] Error scrolling editor:', error);
+		}
+	}
+
+	/**
 	 * 切换滚动同步功能
 	 */
 	toggleScrollSync() {
@@ -829,7 +993,7 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 			link.title = text; // 悬停显示完整文本
 			
 			// 点击跳转到对应标题
-			tocItem.addEventListener('click', (e) => {
+			tocItem.addEventListener('click', async (e) => {
 				e.preventDefault();
 				console.log('[WeWrite TOC] Clicking on:', text, 'id:', headingId);
 				
@@ -840,13 +1004,58 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 					return;
 				}
 				
-				// 方法1: 直接使用 scrollIntoView（最可靠）
-				console.log('[WeWrite TOC] Using scrollIntoView');
-				targetHeading.scrollIntoView({ 
-					behavior: 'smooth', 
-					block: 'start',
-					inline: 'nearest'
-				});
+				// 暂时禁用滚动同步，避免循环滚动
+				const wasScrollSyncEnabled = this.scrollSyncEnabled;
+				if (wasScrollSyncEnabled) {
+					this.isScrolling = true;
+				}
+				
+				// 在预览中滚动到目标标题
+				if (this.contentWrapper) {
+					// 使用 getBoundingClientRect 获取精确位置
+					const wrapperRect = this.contentWrapper.getBoundingClientRect();
+					const headingRect = targetHeading.getBoundingClientRect();
+					
+					console.log('[WeWrite TOC] Wrapper top:', wrapperRect.top);
+					console.log('[WeWrite TOC] Heading top:', headingRect.top);
+					console.log('[WeWrite TOC] Current scrollTop:', this.contentWrapper.scrollTop);
+					
+					// 计算标题相对于 contentWrapper 内容的位置
+					// 公式：标题在文档中的位置 = 当前滚动位置 + (标题在视口中的位置 - 容器在视口中的位置)
+					const targetScrollTop = this.contentWrapper.scrollTop + (headingRect.top - wrapperRect.top);
+					
+					console.log('[WeWrite TOC] Target scrollTop:', targetScrollTop);
+					
+					// 平滑滚动到目标位置，标题显示在窗口第一行
+					this.contentWrapper.scrollTo({
+						top: targetScrollTop,
+						behavior: 'smooth'
+					});
+					
+					// 验证滚动后的位置
+					setTimeout(() => {
+						console.log('[WeWrite TOC] After scroll, scrollTop:', this.contentWrapper?.scrollTop);
+						const newHeadingRect = targetHeading.getBoundingClientRect();
+						const newWrapperRect = this.contentWrapper!.getBoundingClientRect();
+						console.log('[WeWrite TOC] After scroll - heading relative to wrapper:', newHeadingRect.top - newWrapperRect.top);
+					}, 600);
+				}
+				
+				// 同时在编辑器中滚动到对应位置
+				console.log('[WeWrite TOC] About to call scrollEditorToHeading with:', { text, level });
+				try {
+					await this.scrollEditorToHeading(text, level);
+					console.log('[WeWrite TOC] scrollEditorToHeading completed');
+				} catch (error) {
+					console.error('[WeWrite TOC] Error in scrollEditorToHeading:', error);
+				}
+				
+				// 恢复滚动同步
+				if (wasScrollSyncEnabled) {
+					setTimeout(() => {
+						this.isScrolling = false;
+					}, 500); // 增加延迟，等待滚动动画完成
+				}
 				
 				// 额外日志：检查滚动容器
 				if (this.contentWrapper) {
