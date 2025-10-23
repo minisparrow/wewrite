@@ -16,6 +16,8 @@ import { replaceDivWithSection } from "src/utils/utils";
 import { ObsidianMarkdownRenderer } from "../markdown-render";
 import { WeWriteMarkedExtension } from "./extension";
 import { Notice } from "obsidian";
+import hljs from "highlight.js";
+
 export class CodeRenderer extends WeWriteMarkedExtension {
 	showLineNumber: boolean;
 	mermaidIndex: number = 0;
@@ -41,12 +43,52 @@ export class CodeRenderer extends WeWriteMarkedExtension {
 
 	codeRenderer(code: string, infostring: string | undefined): string {
 		const lang = (infostring || '').match(/^\S*/)?.[0];
-		// 保留原始代码格式，将空格和制表符转换为HTML实体
+		// 保留原始代码用于行号
 		const originalCode = code;
-		code = code
-			.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;') // 制表符转为4个不间断空格
-			.replace(/ /g, '&nbsp;') // 普通空格转为不间断空格
-			.replace(/\n/g, '<br>'); // 换行符转为br标签
+		
+		// 尝试使用 highlight.js 进行语法高亮
+		let highlightedCode = code;
+		let isHighlighted = false;
+		
+		// 跳过特殊语言
+		const skipHighlight = !lang || 
+			lang.toLowerCase() === 'mermaid' || 
+			lang.toLowerCase() === 'charts' ||
+			lang.toLowerCase() === 'dataview' ||
+			lang.toLowerCase() === 'wewrite-profile' ||
+			CodeRenderer.getMathType(lang);
+		
+		if (!skipHighlight) {
+			if (hljs.getLanguage(lang)) {
+				try {
+					const result = hljs.highlight(code, { language: lang });
+					highlightedCode = result.value;
+					isHighlighted = true;
+				} catch (err) {
+					console.warn('Highlight.js error:', err);
+				}
+			} else {
+				// 如果语言不存在，尝试自动检测
+				try {
+					const result = hljs.highlightAuto(code);
+					highlightedCode = result.value;
+					isHighlighted = true;
+				} catch (err) {
+					console.warn('Highlight.js auto error:', err);
+				}
+			}
+		}
+		
+		// 如果没有高亮成功，手动转义 HTML 并转换空格和换行
+		if (!isHighlighted) {
+			highlightedCode = code
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+				.replace(/ /g, '&nbsp;')
+				.replace(/\n/g, '<br>');
+		}
 
 		let codeSection = '<section class="code-container"><section class="code-section-banner"></section><section class="code-section">';
 
@@ -65,12 +107,20 @@ export class CodeRenderer extends WeWriteMarkedExtension {
 		}
 
 		if (!lang) {
-			codeSection += `<pre><code>${code}</code></pre>`;
+			codeSection += `<pre><code>${highlightedCode}</code></pre>`;
 		} else {
-			codeSection += `<pre><code class="hljs language-${lang}" >${code}</code></pre>`
+			codeSection += `<pre><code class="hljs language-${lang}">${highlightedCode}</code></pre>`
 		}
 
-		return codeSection + '</section></section>';
+		const result = codeSection + '</section></section>';
+		
+		// 调试：输出实际的 HTML 片段
+		if (isHighlighted && lang === 'python') {
+			console.log('[CodeRenderer] Python code HTML sample:');
+			console.log(result.substring(result.indexOf('<code'), result.indexOf('</code>') + 7).substring(0, 300));
+		}
+		
+		return result;
 
 	}
 

@@ -98,9 +98,10 @@ export class WechatRender {
 		this.addExtension(
 			new CodespanRenderer(this.plugin, this.previewRender, this.marked)
 		);
-		this.addExtension(
-			new CodeHighlight(this.plugin, this.previewRender, this.marked)
-		);
+		// CodeHighlight 已在 CodeRenderer 中集成，不再需要单独的扩展
+		// this.addExtension(
+		// 	new CodeHighlight(this.plugin, this.previewRender, this.marked)
+		// );
 		this.addExtension(
 			new MathRenderer(this.plugin, this.previewRender, this.marked)
 		);
