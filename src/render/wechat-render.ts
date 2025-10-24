@@ -33,6 +33,7 @@ import { Footnote } from "./marked-extensions/footnote";
 import { Links } from "./marked-extensions/links";
 import { Summary } from "./marked-extensions/summary";
 import { Image } from "./marked-extensions/image";
+import { AutoTOC } from "./marked-extensions/auto-toc";
 // import { ListItem } from './marked-extensions/list-item'
 
 const markedOptiones = {
@@ -122,6 +123,9 @@ export class WechatRender {
 		);
 		this.addExtension(
 			new Image(this.plugin, this.previewRender, this.marked)
+		);
+		this.addExtension(
+			new AutoTOC(this.plugin, this.previewRender, this.marked)
 		);
 		// this.addExtension(new ListItem(this.plugin, this.previewRender, this.marked))
 	}

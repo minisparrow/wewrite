@@ -1,0 +1,63 @@
+/**
+ * 按钮样式标题 - 类似微信公众号文章的深蓝色按钮标题
+ * Button-style headings like WeChat articles with deep blue background
+ * Applies by default to all h1 and h2 headings
+ */
+
+/* H1 和 H2 标题容器居中 */
+.wewrite h1,
+.wewrite h2 {
+	text-align: center;
+	margin: 1.5rem auto;
+}
+
+/* 按钮样式的标题外框 */
+.wewrite h1 .wewrite-heading-outbox,
+.wewrite h2 .wewrite-heading-outbox {
+	display: inline-block;
+	background: linear-gradient(135deg, #2563a8 0%, #1e4d8b 100%);
+	color: white;
+	padding: 0.7rem 2rem;
+	border-radius: 2rem;
+	font-weight: 600;
+	box-shadow: 0 4px 12px rgba(37, 99, 168, 0.3);
+	text-align: center;
+	min-width: 8rem;
+}
+
+/* 标题内容文字为白色 */
+.wewrite h1 .wewrite-heading-leaf,
+.wewrite h2 .wewrite-heading-leaf {
+	color: white !important;
+}
+
+/* H1 大小 */
+.wewrite h1 {
+	font-size: 1.1rem;
+}
+
+.wewrite h1 .wewrite-heading-outbox {
+	padding: 0.7rem 2rem;
+}
+
+/* H2 大小 */
+.wewrite h2 {
+	font-size: 1rem;
+}
+
+.wewrite h2 .wewrite-heading-outbox {
+	padding: 0.6rem 1.8rem;
+}
+
+/* 隐藏标题前缀和尾部装饰（如果有） */
+.wewrite h1 .wewrite-heading-prefix,
+.wewrite h2 .wewrite-heading-prefix,
+.wewrite h1 .wewrite-heading-tail,
+.wewrite h2 .wewrite-heading-tail {
+	display: none;
+}
+
+/* 第一个标题（通常是"目录"）使用更深的蓝色 */
+.wewrite h1:first-of-type .wewrite-heading-outbox {
+	background: linear-gradient(135deg, #1e4d8b 0%, #15366b 100%);
+}

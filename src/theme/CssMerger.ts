@@ -30,6 +30,8 @@ import $24 from '../assets/default-styles/24_table.css';
 import $25 from '../assets/default-styles/25_code.css';
 import $26 from '../assets/default-styles/26_blockquote.css';
 import $27 from '../assets/default-styles/27_links.css';
+import $28 from '../assets/default-styles/28_toc.css';
+import $29 from '../assets/default-styles/29_button_heading.css';
 import $30 from '../assets/default-styles/30_callout.css';
 import $31 from '../assets/default-styles/31_admonition.css';
 import $32 from '../assets/default-styles/32_math.css';
@@ -66,6 +68,8 @@ const baseCSS = [
 	$25,
 	$26,
 	$27,
+	$28,
+	$29,
 	$30,
 	$31,
 	$32,
