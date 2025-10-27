@@ -48,6 +48,7 @@ const DEFAULT_SETTINGS: WeWriteSetting = {
 	ipAddress: "",
 	css_styles_folder: "wewrite-css-styles",
 	codeLineNumber: true,
+	autoGenerateTOC: false, // 默认关闭自动生成目录
 	accountDataPath: "wewrite-accounts",
 	useCenterToken: false,
 	chatAccounts: [],

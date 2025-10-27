@@ -793,6 +793,18 @@ export class WeWriteSettingTab extends PluginSettingTab {
 					});
 			});
 
+		new Setting(mpFrame)
+			.setName("自动生成目录")
+			.setDesc("在文章开头自动生成目录（包含所有 H1 和 H2 标题）")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.autoGenerateTOC)
+					.onChange(async (value) => {
+						this.plugin.settings.autoGenerateTOC = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
 		// mpFrame.createEl("hr");
 
 		new Setting(mpFrame).setName($t("settings.account-info")).setHeading();

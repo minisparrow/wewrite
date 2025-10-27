@@ -43,6 +43,7 @@ export type WeWriteSetting = {
     custom_theme?: string;
     codeLineNumber: boolean;
     css_styles_folder: string;
+    autoGenerateTOC: boolean; // 是否自动生成目录
     _id?: string; // = 'wewrite-setting';
     _rev?: string;
     ipAddress?: string;

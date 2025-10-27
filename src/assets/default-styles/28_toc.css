@@ -2,6 +2,7 @@
  * 自动生成目录样式 - 微信公众号风格
  * Auto-generated TOC styles - WeChat article style
  * 蓝色圆形序号 + 蓝色链接
+ * 使用 section 和 p 标签以符合微信公众号要求
  */
 
 :root {
@@ -17,21 +18,18 @@
 }
 
 /* 目录标题已由 button-heading 样式处理 */
-.wewrite-auto-toc .wewrite-toc-title {
+.wewrite-auto-toc h1 {
 	margin-bottom: 1rem;
 }
 
-/* 目录列表 */
+/* 目录列表容器 */
 .wewrite-auto-toc .wewrite-toc-list {
-	list-style: none;
 	padding: 0;
 	margin: 0;
-	counter-reset: toc-counter;
 }
 
 /* 目录子列表（二级标题） */
 .wewrite-auto-toc .wewrite-toc-sublist {
-	list-style: none;
 	padding: 0 0 0 1.5rem;
 	margin: 0.3rem 0;
 }
@@ -45,7 +43,7 @@
 
 /* 目录链接 */
 .wewrite-auto-toc .wewrite-toc-link {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	text-decoration: none;
 	color: var(--toc-link-color);
@@ -79,24 +77,24 @@
 }
 
 /* H1 目录项 */
-.wewrite-auto-toc .wewrite-toc-h1 > .wewrite-toc-link {
+.wewrite-auto-toc .wewrite-toc-h1 .wewrite-toc-link {
 	font-size: 1rem;
 	font-weight: 500;
 }
 
-.wewrite-auto-toc .wewrite-toc-h1 > .wewrite-toc-link .wewrite-toc-number {
+.wewrite-auto-toc .wewrite-toc-h1 .wewrite-toc-link .wewrite-toc-number {
 	min-width: 1.8rem;
 	height: 1.8rem;
 	font-size: 0.9rem;
 }
 
 /* H2 目录项 */
-.wewrite-auto-toc .wewrite-toc-h2 > .wewrite-toc-link {
+.wewrite-auto-toc .wewrite-toc-h2 .wewrite-toc-link {
 	font-size: 0.95rem;
 	font-weight: normal;
 }
 
-.wewrite-auto-toc .wewrite-toc-h2 > .wewrite-toc-link .wewrite-toc-number {
+.wewrite-auto-toc .wewrite-toc-h2 .wewrite-toc-link .wewrite-toc-number {
 	min-width: 2.2rem;
 	height: 1.5rem;
 	border-radius: 0.75rem;
