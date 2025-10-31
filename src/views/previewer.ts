@@ -25,6 +25,7 @@ import {
 	uploadSVGs,
 	uploadURLImage,
 	uploadURLVideo,
+	uploadURLAudio,
 } from "src/render/post-render";
 import { WechatRender } from "src/render/wechat-render";
 import { ResourceManager } from "../assets/resource-manager";
@@ -373,6 +374,7 @@ export class PreviewPanel extends ItemView implements PreviewRender {
 		await uploadCanvas(this.articleDiv, this.plugin.wechatClient);
 		await uploadURLImage(this.articleDiv, this.plugin.wechatClient);
 		await uploadURLVideo(this.articleDiv, this.plugin.wechatClient);
+		await uploadURLAudio(this.articleDiv, this.plugin.wechatClient);
 
 		const media_id = await this.wechatClient.sendArticleToDraftBox(
 			this.draftHeader.getActiveLocalDraft()!,

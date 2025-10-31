@@ -63,8 +63,17 @@ function getEmbedType(link: string) {
 		case "pdf":
 			return "pdf";
 		case "mp4":
+		case "mov":
+		case "avi":
+		case "mkv":
+		case "webm":
 			return "video";
 		case "mp3":
+		case "m4a":
+		case "aac":
+		case "ogg":
+		case "opus":
+		case "flac":
 		case "wma":
 		case "wav":
 		case "amr":
@@ -454,7 +463,7 @@ export class Embed extends WeWriteMarkedExtension {
 					},
 					renderer: (token: Tokens.Generic) => {
 						const embedType = getEmbedType(token.href);
-						console.log("render embed type:", token, embedType);
+						console.log("[WeWrite Embed] Rendering embed - type:", embedType, "href:", token.href);
 						
 						if (embedType == "image" || embedType == "webp") {
 							// images
@@ -489,10 +498,13 @@ export class Embed extends WeWriteMarkedExtension {
 						} else if (embedType == "note") {
 							return token.html;
 						} else if (embedType == "video") {
+							console.log("[WeWrite Embed] Rendering video");
 							return this.renderVideo(token.href);
 						} else if (embedType == "voice") {
+							console.log("[WeWrite Embed] Rendering voice");
 							return this.renderVoice(token.href);
 						} else {
+							console.log("[WeWrite Embed] Unknown type:", embedType);
 							// return 'unknown type: '+token.href
 						}
 					},
@@ -563,23 +575,49 @@ export class Embed extends WeWriteMarkedExtension {
 		return `<section class="pdf-crop">${root.outerHTML}</section>`;
 	}
 	renderVideo(href: string): string | false | undefined {
+		// 先尝试从 Obsidian 渲染器获取
 		const root = ObsidianMarkdownRenderer.getInstance(
 			this.plugin.app
 		).queryElement(this.videoIndex, "video");
-		if (!root) {
-			return "render video failed";
-		}
+		
 		this.videoIndex++;
-		return `<section class="video">${root.outerHTML}</section>`;
+		
+		if (root) {
+			return `<section class="video">${root.outerHTML}</section>`;
+		}
+		
+		// 如果获取失败，直接生成 video 标签
+		const src = this.getImagePath(href);
+		if (!src) {
+			return "render video failed: file not found";
+		}
+		
+		return `<section class="video"><video src="${src}" controls preload="metadata" style="width: 100%; max-width: 100%;"></video></section>`;
 	}
 	renderVoice(href: string): string | false | undefined {
+		console.log('[WeWrite Audio] Rendering audio:', href);
+		
+		// 先尝试从 Obsidian 渲染器获取
 		const root = ObsidianMarkdownRenderer.getInstance(
 			this.plugin.app
 		).queryElement(this.voiceIndex, "audio");
-		if (!root) {
-			return "render voice failed";
-		}
+		
 		this.voiceIndex++;
-		return `<section class="audio">${root.outerHTML}</section>`;
+		
+		if (root) {
+			console.log('[WeWrite Audio] Got audio from Obsidian renderer');
+			return `<section class="audio">${root.outerHTML}</section>`;
+		}
+		
+		// 如果获取失败，直接生成 audio 标签
+		console.log('[WeWrite Audio] Generating audio tag manually');
+		const src = this.getImagePath(href);
+		if (!src) {
+			console.error('[WeWrite Audio] Failed to get file path for:', href);
+			return "render voice failed: file not found";
+		}
+		
+		console.log('[WeWrite Audio] Audio src:', src);
+		return `<section class="audio"><audio src="${src}" controls preload="metadata" style="width: 100%; max-width: 500px;"></audio></section>`;
 	}
 }

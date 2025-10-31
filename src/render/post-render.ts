@@ -7,6 +7,8 @@ import { fetchImageBlob } from 'src/utils/utils';
 import { WechatClient } from './../wechat-api/wechat-client';
 import WeWritePlugin from 'src/main';
 import { log } from 'console';
+import { Notice } from 'obsidian';
+
 function imageFileName(mime:string){
     const type = mime.split('/')[1]
     return `image-${new Date().getTime()}.${type}`
@@ -243,4 +245,123 @@ export async function uploadURLVideo(root:HTMLElement, wechatClient:WechatClient
         }
     })
     await Promise.all(uploadPromises)
+}
+
+/**
+ * 上传音频文件到微信公众号
+ * Upload audio files to WeChat MP
+ */
+export async function uploadURLAudio(root: HTMLElement, wechatClient: WechatClient): Promise<void> {
+    const audios: HTMLAudioElement[] = [];
+    
+    root.querySelectorAll('audio').forEach(audio => {
+        audios.push(audio as HTMLAudioElement);
+    });
+    
+    console.log(`[WeWrite Audio Upload] Found ${audios.length} audio elements`);
+    
+    const uploadPromises = audios.map(async (audio, index) => {
+        console.log(`[WeWrite Audio Upload] Processing audio ${index + 1}:`, audio.src);
+        let blob: Blob | undefined;
+        
+        // 跳过已经是微信服务器的音频
+        if (audio.src.includes('://mmbiz.qpic.cn/') || audio.src.includes('://mmbiz.qlogo.cn/')) {
+            console.log(`[WeWrite Audio Upload] Audio ${index + 1} is already on WeChat server, skipping`);
+            return;
+        }
+        
+        // 处理 data URL
+        if (audio.src.startsWith('data:audio/')) {
+            console.log(`[WeWrite Audio Upload] Audio ${index + 1} is data URL`);
+            blob = dataURLtoBlob(audio.src);
+        } else if (audio.src.startsWith('app://')) {
+            // Obsidian 本地文件
+            console.log(`[WeWrite Audio Upload] Audio ${index + 1} is Obsidian local file`);
+            try {
+                blob = await fetchAudioBlob(audio.src);
+            } catch (error) {
+                console.error(`[WeWrite Audio Upload] Failed to fetch audio ${index + 1}:`, audio.src, error);
+                return;
+            }
+        } else if (audio.src.startsWith('http://') || audio.src.startsWith('https://')) {
+            // 外部 URL
+            console.log(`[WeWrite Audio Upload] Audio ${index + 1} is external URL`);
+            try {
+                blob = await fetchAudioBlob(audio.src);
+            } catch (error) {
+                console.error(`[WeWrite Audio Upload] Failed to fetch audio ${index + 1} from URL:`, audio.src, error);
+                return;
+            }
+        }
+        
+        if (blob === undefined) {
+            console.warn(`[WeWrite Audio Upload] Cannot process audio ${index + 1}:`, audio.src);
+            return;
+        }
+        
+        console.log(`[WeWrite Audio Upload] Audio ${index + 1} blob size:`, blob.size, 'type:', blob.type);
+        
+        // 检查文件大小限制
+        const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+        const maxSizeMB = 2; // WeChat voice material limit
+        
+        if (blob.size > maxSizeMB * 1024 * 1024) {
+            console.error(`[WeWrite Audio Upload] Audio ${index + 1} is too large: ${sizeMB}MB (max ${maxSizeMB}MB for voice)`);
+            new Notice(`音频文件过大：${sizeMB}MB（微信语音素材限制${maxSizeMB}MB），无法上传`, 5000);
+            return;
+        }
+        
+        // 上传音频到微信
+        try {
+            const fileName = audioFileName(blob.type);
+            console.log(`[WeWrite Audio Upload] Uploading audio ${index + 1} as:`, fileName);
+            const res = await wechatClient.uploadMaterial(blob, fileName, 'voice');
+            
+            if (res && res.media_id) {
+                console.log(`[WeWrite Audio Upload] Audio ${index + 1} uploaded successfully, media_id:`, res.media_id);
+                // 获取上传后的音频信息
+                const audio_info = await wechatClient.getMaterialById(res.media_id);
+                if (audio_info && audio_info.url) {
+                    audio.src = audio_info.url;
+                    console.log(`[WeWrite Audio Upload] Audio ${index + 1} URL updated to:`, audio_info.url);
+                } else {
+                    console.error(`[WeWrite Audio Upload] Audio ${index + 1} uploaded but no URL returned`);
+                }
+            } else {
+                console.error(`[WeWrite Audio Upload] Audio ${index + 1} upload failed: no media_id returned (likely size limit exceeded)`);
+            }
+        } catch (error) {
+            console.error(`[WeWrite Audio Upload] Audio ${index + 1} upload failed:`, error);
+        }
+    });
+    
+    await Promise.all(uploadPromises);
+    console.log('[WeWrite Audio Upload] All audio uploads completed');
+}
+
+/**
+ * 生成音频文件名
+ */
+function audioFileName(mime: string): string {
+    const type = mime.split('/')[1] || 'mp3';
+    // 微信支持的音频格式：mp3, wma, wav, amr
+    const supportedTypes = ['mp3', 'wma', 'wav', 'amr'];
+    const ext = supportedTypes.includes(type) ? type : 'mp3';
+    return `audio-${new Date().getTime()}.${ext}`;
+}
+
+/**
+ * 获取音频文件的 Blob
+ */
+async function fetchAudioBlob(src: string): Promise<Blob | undefined> {
+    try {
+        const response = await fetch(src);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.blob();
+    } catch (error) {
+        console.error('Failed to fetch audio blob:', error);
+        return undefined;
+    }
 }
